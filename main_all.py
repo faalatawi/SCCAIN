@@ -1,6 +1,6 @@
 import sys
 
-sys.path.append('../')
+sys.path.append("../")
 
 import numpy as np
 import tensorflow as tf
@@ -13,17 +13,18 @@ from scipy.sparse import coo_matrix
 def run_model(data, FLAGS):
     links, FA, GA, FL, GL, FP, FN, GP, GN, FGP, FGN = data
 
-
     FC = FLAGS.FC
     GC = FLAGS.GC
-    
-    global_step = tf.train.get_or_create_global_step()
 
-    md = SCCAIN(links, FN, GN, FP, GP, FGP, FGN, FA, GA, FLAGS, FC, GC, global_step, FLAGS.TP)
+    global_step = tf.compat.v1.train.get_or_create_global_step()
+
+    md = SCCAIN(
+        links, FN, GN, FP, GP, FGP, FGN, FA, GA, FLAGS, FC, GC, global_step, FLAGS.TP
+    )
 
     print("start training")
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+    with tf.compat.v1.Session() as sess:
+        sess.run(tf.compat.v1.global_variables_initializer())
 
         F = np.random.random([FA.shape[0], FC])
         S = np.random.random([FC, GC])
@@ -36,20 +37,13 @@ def run_model(data, FLAGS):
         FSG = np.dot(np.dot(F, S), G.T)
         print(datetime.now().second)
         for i in range(FLAGS.epochs):
-            new_FSG,_, _ = calculate_FSG(F, G, S)
-            feed_dict2 = {
-                md.FSG2: new_FSG
-            }
+            new_FSG, _, _ = calculate_FSG(F, G, S)
+            feed_dict2 = {md.FSG2: new_FSG}
             for j in range(10):
                 _, loss, XR = sess.run(md.opt2, feed_dict=feed_dict2)
 
             for j in range(10):
-                feed_dict = {
-                    md.F: F,
-                    md.S: S,
-                    md.G: G,
-                    md.XR: XR
-                }
+                feed_dict = {md.F: F, md.S: S, md.G: G, md.XR: XR}
                 F, S, G, FSG = sess.run(md.opt1, feed_dict=feed_dict)
             Ft.append(np.argmax(F, axis=1))
             Gt.append(np.argmax(G, axis=1))
@@ -58,9 +52,12 @@ def run_model(data, FLAGS):
 
 def norm_cluster(matrix):
     idx = np.argmax(matrix, axis=1)
-    idx2 = np.arange(matrix.shape[0], dtype=np.int)
+    # idx2 = np.arange(matrix.shape[0], dtype=np.int)
+    idx2 = np.arange(matrix.shape[0], dtype=np.int32)
 
-    new_matrix = np.array(coo_matrix((np.ones([len(idx)]), (idx2, idx)), shape=matrix.shape).toarray())
+    new_matrix = np.array(
+        coo_matrix((np.ones([len(idx)]), (idx2, idx)), shape=matrix.shape).toarray()
+    )
 
     temp = new_matrix.T
     subs = np.sum(np.square(temp), axis=1)

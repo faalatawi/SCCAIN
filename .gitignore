@@ -1,0 +1,6 @@
+*.pyc
+old/
+poetry.lock
+pyproject.toml
+deleteme/
+output_dblp/

@@ -3,7 +3,7 @@ from scipy.sparse import coo_matrix
 from sklearn.metrics import adjusted_rand_score as ARI
 from sklearn.metrics import normalized_mutual_info_score as NMI
 import os
-from tools.basic_tools import *
+from basic_tools import *
 
 
 def measure(FC, GC, SL, TL):
@@ -31,7 +31,7 @@ def purity(Pred, Labels):
         q = Pred[i]
         matrix[q, v] += 1
     a = np.sum(matrix)
-    b = (np.sum(matrix, axis=1) / a)
+    b = np.sum(matrix, axis=1) / a
     p = np.max(matrix / np.sum(matrix, axis=1).reshape([-1, 1]), axis=1)
     return np.sum(p * b)
 
@@ -44,11 +44,11 @@ def PRF1(Pred, Labels):
         q = Pred[i]
         matrix[q, v] += 1
     TP = np.sum(matrix * (matrix - 1) / 2)
-    a = (np.sum(matrix, axis=1))
+    a = np.sum(matrix, axis=1)
 
     TFP = np.sum(a * (a - 1) / 2)
     FP = TFP - TP
-    b = (np.sum(matrix, axis=0))
+    b = np.sum(matrix, axis=0)
 
     FN = np.sum(b * (b - 1) / 2) - TP
 
@@ -112,8 +112,11 @@ def measure_result(FL, GL, FC, GC):
     fids = np.where(FL >= 0)[0]
     gids = np.where(GL >= 0)[0]
 
-    new_FL = np.array(FL[fids], np.int).tolist()
-    new_GL = np.array(GL[gids], np.int).tolist()
+    # new_FL = np.array(FL[fids], np.int).tolist()
+    # new_GL = np.array(GL[gids], np.int).tolist()
+    new_FL = np.array(FL[fids], np.int32).tolist()
+    new_GL = np.array(GL[gids], np.int32).tolist()
+
     F1 = np.unique(FC[fids], return_inverse=True)[1].tolist()
     G1 = np.unique(GC[gids], return_inverse=True)[1].tolist()
     # print(F1, G1)

@@ -6,14 +6,32 @@ from input import *
 
 
 class SCCAIN:
-    def __init__(self, links, FN, GN, FP, GP, FGP, FGN, FA, GA, FLAGS, FC, GC, global_step, types=1):
+    def __init__(
+        self,
+        links,
+        FN,
+        GN,
+        FP,
+        GP,
+        FGP,
+        FGN,
+        FA,
+        GA,
+        FLAGS,
+        FC,
+        GC,
+        global_step,
+        types=1,
+    ):
         NF, NFA = FA.shape
         NG, NGA = GA.shape
         ND = FLAGS.ND
 
         D = 5
 
-        W = tf.get_variable(name="W", dtype=tf.float32, shape=[links.shape[0], 1, 1])
+        W = tf.compat.v1.get_variable(
+            name="W", dtype=tf.float32, shape=[links.shape[0], 1, 1]
+        )
 
         if types == 1:
             links = np.array([m.toarray() for m in links[0]])
@@ -21,25 +39,37 @@ class SCCAIN:
         W2 = tf.nn.relu(W) + 0.01
         W2 = W2 / tf.reduce_sum(W2)
 
-
         FAtt = tf.constant(FA, dtype=tf.float32, shape=[NF, NFA])
         GAtt = tf.constant(GA, dtype=tf.float32, shape=[NG, NGA])
-        b1 = tf.get_variable(name="b1", dtype=tf.float32, shape=(1,), initializer=tf.zeros_initializer())
-        Phi1 = tf.get_variable(dtype=tf.float32, shape=[NFA, NGA],
-                               initializer=tf.glorot_uniform_initializer(seed=FLAGS.seed),
-                               name="project_matrix1")
+        b1 = tf.compat.v1.get_variable(
+            name="b1",
+            dtype=tf.float32,
+            shape=(1,),
+            initializer=tf.compat.v1.zeros_initializer(),
+        )
+        Phi1 = tf.compat.v1.get_variable(
+            dtype=tf.float32,
+            shape=[NFA, NGA],
+            initializer=tf.compat.v1.glorot_uniform_initializer(seed=FLAGS.seed),
+            name="project_matrix1",
+        )
 
         alpha = FLAGS.times * FLAGS.kd
 
-        self.XA = tf.nn.relu(tf.tanh(tf.matmul(tf.matmul(FAtt, Phi1), GAtt, transpose_b=True) + b1)) + 0.0001
+        self.XA = (
+            tf.nn.relu(
+                tf.tanh(tf.matmul(tf.matmul(FAtt, Phi1), GAtt, transpose_b=True) + b1)
+            )
+            + 0.0001
+        )
 
         self.XL = tf.reduce_sum(tf.multiply(XL, W2), axis=0)
         self.X_rele = (1 - alpha) * self.XL + alpha * self.XA
 
-        self.F = tf.placeholder(tf.float32, shape=[NF, FC], name="F")
-        self.S = tf.placeholder(tf.float32, shape=[FC, GC], name="S")
-        self.G = tf.placeholder(tf.float32, shape=[NG, GC], name="G")
-        self.XR = tf.placeholder(tf.float32, shape=[NF, NG], name="XR")
+        self.F = tf.compat.v1.placeholder(tf.float32, shape=[NF, FC], name="F")
+        self.S = tf.compat.v1.placeholder(tf.float32, shape=[FC, GC], name="S")
+        self.G = tf.compat.v1.placeholder(tf.float32, shape=[NG, GC], name="G")
+        self.XR = tf.compat.v1.placeholder(tf.float32, shape=[NF, NG], name="XR")
 
         # ---------------------------------------------
         N1_F = create_sparseTensor(FN, NF)
@@ -49,9 +79,9 @@ class SCCAIN:
         P1_G = create_sparseTensor(GP, NG)
         # ---------------------------------------------
 
-        P_F = tf.sparse_tensor_dense_matmul(tf.sparse_reorder(P1_F), self.F)
+        P_F = tf.sparse.sparse_dense_matmul(tf.sparse.reorder(P1_F), self.F)
         # N_F = tf.sparse_tensor_dense_matmul(tf.sparse_reorder(N1_F), self.F)
-        P_G = tf.sparse_tensor_dense_matmul(tf.sparse_reorder(P1_G), self.G)
+        P_G = tf.sparse.sparse_dense_matmul(tf.sparse.reorder(P1_G), self.G)
         # N_G = tf.sparse_tensor_dense_matmul(tf.sparse_reorder(N1_G), self.G)
         # P_F = 0
         # P_G = 0
@@ -60,7 +90,6 @@ class SCCAIN:
 
         up_F = tf.matmul(tf.matmul(self.XR, self.G), self.S, transpose_b=True) + P_F
         down_F = tf.matmul(self.F, tf.matmul(self.F, (up_F), transpose_a=True))
-
 
         self.new_F = tf.multiply(tf.sqrt(tf.divide(up_F, down_F)), self.F)
 
@@ -85,24 +114,28 @@ class SCCAIN:
 
         self.opt1 = [self.new_F, self.new_S, self.new_G, self.FSG]
 
-        self.FSG2 = tf.placeholder(dtype=tf.float32, shape=[NF, NG], name="FSG2")
+        self.FSG2 = tf.compat.v1.placeholder(
+            dtype=tf.float32, shape=[NF, NG], name="FSG2"
+        )
 
         self.loss3 = tf.reduce_mean(tf.square(self.XR - self.FSG))
 
         # -------------------relevance optimization
 
         loss1 = tf.reduce_mean(tf.square(self.X_rele - self.FSG2))
-        loss2 = tf.reduce_mean(tf.multiply(Phi1, Phi1)) + tf.reduce_mean(
-            tf.multiply(b1, b1)) + tf.reduce_mean(tf.multiply(W, W))
+        loss2 = (
+            tf.reduce_mean(tf.multiply(Phi1, Phi1))
+            + tf.reduce_mean(tf.multiply(b1, b1))
+            + tf.reduce_mean(tf.multiply(W, W))
+        )
 
         loss3 = self.loss_must_cannot(FGP, FGN, self.X_rele, NF, NG)
 
-
         self.loss = FLAGS.lambdas * loss2 + loss3 + loss1
 
-
-        optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate).minimize(self.loss,
-                                                                                       global_step=global_step)
+        optimizer = tf.compat.v1.train.AdamOptimizer(
+            learning_rate=FLAGS.learning_rate
+        ).minimize(self.loss, global_step=global_step)
         self.opt2 = [optimizer, self.loss, self.X_rele]
 
     def loss_must_cannot(self, Pos, Neg, X, a, b):
@@ -114,7 +147,15 @@ class SCCAIN:
         return x2 - x1
 
     def create_sparse_dense_tensor(self, indices, a, b):
-        spm = tf.SparseTensor(indices=indices, values=tf.ones(len(indices), dtype=tf.float32), dense_shape=[a, b])
-        spm = tf.sparse_reorder(spm)
-        m = tf.sparse_to_dense(sparse_indices=spm.indices, sparse_values=spm.values, output_shape=spm.dense_shape)
+        spm = tf.SparseTensor(
+            indices=indices,
+            values=tf.ones(len(indices), dtype=tf.float32),
+            dense_shape=[a, b],
+        )
+        spm = tf.sparse.reorder(spm)
+        m = tf.compat.v1.sparse_to_dense(
+            sparse_indices=spm.indices,
+            sparse_values=spm.values,
+            output_shape=spm.dense_shape,
+        )
         return m
